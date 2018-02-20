@@ -20,6 +20,9 @@ _conf_dir = None
 
 _credential_map = {}
 
+MOCK_ACCESKEY_ID='ignored123'
+MOCK_SECRET='ignored432'
+MOCK_TOKEN='notatoken'
 
 def _lookup_ip_role_arn(source_ip):
     try:
@@ -57,6 +60,28 @@ def _index(items):
     """
     bottle.response.content_type = 'text/plain'
     return "\n".join(items)
+
+def get_credentials(now):
+    access_key_id = os.environ['AWS_ACCESS_KEY_ID']
+    secret_access_key = os.environ['AWS_SECRET_ACCESS_KEY']
+    token = os.environ['SESSION_TOKEN']
+
+    if access_key_id and secret_access_key:
+        credentials = {}
+        credentials['AccessKeyId'] = access_key_id
+        credentials['SecretAccessKey'] = secret_access_key
+        credentials['SessionToken'] = token if token else MOCK_TOKEN
+        credentials['Expiration'] = now + datetime.timedelta(minutes=60)
+    else:
+        botocore_session = botocore.session.Session()
+        botocore_session.get_component('credential_provider').remove('iam-role')
+        session = boto3.session.Session(botocore_session=botocore_session)
+
+        credentials = session.client('sts').assume_role(RoleArn=role_arn,
+                                                             RoleSessionName="ectou-metadata")['Credentials']
+    
+    credentials['LastUpdated'] = now
+    return credentials
 
 
 @bottle.route("/latest")
@@ -109,14 +134,7 @@ def security_credentials_role_name():
     now = datetime.datetime.now(tz=dateutil.tz.tzutc())
     if not credentials or credentials['Expiration'] < now + _refresh_timeout:
         try:
-            # Use any boto3 credential provider except the instance metadata provider.
-            botocore_session = botocore.session.Session()
-            botocore_session.get_component('credential_provider').remove('iam-role')
-            session = boto3.session.Session(botocore_session=botocore_session)
-
-            credentials = session.client('sts').assume_role(RoleArn=role_arn,
-                                                            RoleSessionName="ectou-metadata")['Credentials']
-            credentials['LastUpdated'] = now
+            credentials = get_credentials(now)
 
             _credential_map[role_arn] = credentials
 

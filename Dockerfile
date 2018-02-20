@@ -13,11 +13,11 @@ RUN curl -L https://github.com/krallin/tini/releases/download/v0.15.0/tini > tin
     mv tini /usr/local/bin/tini && \
     chmod +x /usr/local/bin/tini
 
-ENV MOCK_METADATA_PORT 5000
+ENV MOCK_METADATA_PORT 80
 
 EXPOSE ${MOCK_METADATA_PORT}
 
-USER ec2-user
+#USER ec2-user
 
 ENTRYPOINT ["tini", "--"]
 CMD ectou_metadata --host 0.0.0.0 --port ${MOCK_METADATA_PORT} --role-arn ${MOCK_METADATA_ROLE_ARN}
